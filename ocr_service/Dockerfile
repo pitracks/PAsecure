@@ -8,11 +8,13 @@ RUN apt-get update \
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
+# Railway builds from project root, so reference ocr_service/ path
+COPY ocr_service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app.py .
+# Railway builds from project root, so reference ocr_service/ path
+COPY ocr_service/app.py .
 
 # Use PORT environment variable (defaults to 8080)
 ENV PORT=8080
