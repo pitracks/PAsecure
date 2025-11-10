@@ -490,6 +490,40 @@ async function processFile(file) {
             // Store verification ID - we'll wait for OCR before showing results
             currentProcessingVerificationId = verification.id;
             
+            // Check if OCR is already complete (in case it finished while CNN was running)
+            const { data: currentStatus, error: statusError } = await window.supabaseClient.supabase
+                .from('verifications')
+                .select('ocr_status, detected_id_number, detected_holder_name')
+                .eq('id', verification.id)
+                .single();
+            
+            if (!statusError && currentStatus && currentStatus.ocr_status === 'complete') {
+                // OCR already completed! Fetch and display immediately
+                console.log('OCR already completed, fetching results immediately');
+                const { data: fullVerification, error: fetchError } = await window.supabaseClient.supabase
+                    .from('verifications')
+                    .select('*')
+                    .eq('id', verification.id)
+                    .single();
+                
+                if (!fetchError && fullVerification) {
+                    const results = {
+                        verification_id: fullVerification.id,
+                        status: fullVerification.status || 'flagged',
+                        confidence_score: fullVerification.confidence_score || 0,
+                        detected_id_type: fullVerification.detected_id_type,
+                        detected_id_number: fullVerification.detected_id_number,
+                        detected_holder_name: fullVerification.detected_holder_name,
+                        security_features: fullVerification.security_features || [],
+                        processing_time_ms: fullVerification.processing_time_ms || 0
+                    };
+                    displayResults(results);
+                    showNotification('Verification complete!', 'success');
+                    currentProcessingVerificationId = null;
+                    return; // Don't start polling
+                }
+            }
+            
             // Show processing message - results will appear after OCR completes
             const resultsSection = document.getElementById('resultsSection');
             if (resultsSection) {
@@ -499,6 +533,7 @@ async function processFile(file) {
                         <h3>Processing ID...</h3>
                         <p>CNN analysis complete. Waiting for OCR to extract ID details...</p>
                         <p style="font-size: 0.9em; color: #666;">This may take a few minutes. Results will appear automatically.</p>
+                        <button id="checkStatusBtn" onclick="checkVerificationStatus('${verification.id}')" style="margin-top: 20px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Check Status Now</button>
                     </div>
                 `;
                 resultsSection.dataset.verificationId = verification.id;
@@ -766,11 +801,26 @@ function startOCRPolling(verificationId) {
     }
     
     let attempts = 0;
-    const maxAttempts = 24; // Poll for 2 minutes (24 * 5 seconds)
+    const maxAttempts = 120; // Poll for 10 minutes (120 * 5 seconds) - OCR can take time
     
-    ocrPollingInterval = setInterval(async () => {
+    // Check immediately first (in case OCR already completed)
+    checkOCRStatus(verificationId);
+    
+    ocrPollingInterval = setInterval(() => {
         attempts++;
+        checkOCRStatus(verificationId);
         
+        // Only stop if we've tried for a very long time (10 minutes)
+        if (attempts >= maxAttempts) {
+            console.log('OCR polling reached max attempts, but continuing to check...');
+            // Don't stop - keep checking, but less frequently
+            clearInterval(ocrPollingInterval);
+            // Continue with longer intervals (every 30 seconds)
+            ocrPollingInterval = setInterval(() => checkOCRStatus(verificationId), 30000);
+        }
+    }, 5000); // Poll every 5 seconds
+    
+    async function checkOCRStatus(verificationId) {
         try {
             const { data, error } = await window.supabaseClient.supabase
                 .from('verifications')
@@ -780,9 +830,6 @@ function startOCRPolling(verificationId) {
             
             if (error) {
                 console.error('Error polling OCR status:', error);
-                if (attempts >= maxAttempts) {
-                    clearInterval(ocrPollingInterval);
-                }
                 return;
             }
             
@@ -830,20 +877,82 @@ function startOCRPolling(verificationId) {
                 console.warn('OCR processing failed');
                 clearInterval(ocrPollingInterval);
                 ocrPollingInterval = null;
-            } else if (attempts >= maxAttempts) {
-                console.log('OCR polling timeout - stopping');
-                clearInterval(ocrPollingInterval);
-                ocrPollingInterval = null;
+                showNotification('OCR processing failed. Please try again.', 'error');
+            } else {
+                // Still pending - update the message to show we're still waiting
+                console.log(`OCR still pending... (attempt ${attempts})`);
             }
         } catch (err) {
             console.error('Error in OCR polling:', err);
-            if (attempts >= maxAttempts) {
-                clearInterval(ocrPollingInterval);
-                ocrPollingInterval = null;
+        }
+    }
+}
+
+// Manual check for verification status (called by button)
+async function checkVerificationStatus(verificationId) {
+    const btn = document.getElementById('checkStatusBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+    }
+    
+    try {
+        const { data: fullVerification, error: fetchError } = await window.supabaseClient.supabase
+            .from('verifications')
+            .select('*')
+            .eq('id', verificationId)
+            .single();
+        
+        if (fetchError) {
+            console.error('Error fetching verification:', fetchError);
+            showNotification('Failed to check status', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Check Status Now';
+            }
+            return;
+        }
+        
+        if (fullVerification.ocr_status === 'complete') {
+            // OCR is complete! Display results
+            const results = {
+                verification_id: fullVerification.id,
+                status: fullVerification.status || 'flagged',
+                confidence_score: fullVerification.confidence_score || 0,
+                detected_id_type: fullVerification.detected_id_type,
+                detected_id_number: fullVerification.detected_id_number,
+                detected_holder_name: fullVerification.detected_holder_name,
+                security_features: fullVerification.security_features || [],
+                processing_time_ms: fullVerification.processing_time_ms || 0
+            };
+            displayResults(results);
+            showNotification('Verification complete!', 'success');
+            currentProcessingVerificationId = null;
+        } else if (fullVerification.ocr_status === 'failed') {
+            showNotification('OCR processing failed. Please try again.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Check Status Now';
+            }
+        } else {
+            showNotification('OCR still processing... Please wait.', 'info');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Check Status Now';
             }
         }
-    }, 5000); // Poll every 5 seconds
+    } catch (err) {
+        console.error('Error checking verification status:', err);
+        showNotification('Error checking status', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Check Status Now';
+        }
+    }
 }
+
+// Make it globally accessible
+window.checkVerificationStatus = checkVerificationStatus;
 
 // Display Results
 function displayResults(results) {
