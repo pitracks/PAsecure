@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 
 app = FastAPI(title="PASecure OCR Service", docs_url="/docs", redoc_url="/redoc")
@@ -42,6 +42,36 @@ class OCRResult(BaseModel):
     text: str
 
 
+def preprocess_image(image: Image.Image) -> Image.Image:
+    """Apply image preprocessing to improve OCR accuracy"""
+    # Convert to RGB if necessary
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Convert to grayscale for better contrast
+    image = image.convert('L')
+    
+    # Enhance contrast
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2.0)  # Increase contrast by 2x
+    
+    # Enhance sharpness
+    enhancer = ImageEnhance.Sharpness(image)
+    image = enhancer.enhance(2.0)  # Increase sharpness by 2x
+    
+    # Apply slight denoising
+    image = image.filter(ImageFilter.MedianFilter(size=3))
+    
+    # Resize if too small (Tesseract works better with larger images)
+    width, height = image.size
+    if width < 800 or height < 600:
+        scale = max(800 / width, 600 / height)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    
+    return image
+
 @app.post("/ocr", response_model=OCRResult)
 async def run_ocr(file: UploadFile):
     if not file.filename:
@@ -51,15 +81,58 @@ async def run_ocr(file: UploadFile):
         # Read image bytes
         image_bytes = await file.read()
         
-        # Open image with PIL for better processing
+        # Open image with PIL
         image = Image.open(io.BytesIO(image_bytes))
         
-        # Convert to RGB if necessary (handles RGBA, P mode, etc.)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        # Preprocess image for better OCR
+        processed_image = preprocess_image(image)
         
-        # Run OCR
-        text = pytesseract.image_to_string(image, lang="eng")
+        # Try multiple OCR configurations for better results
+        texts = []
+        
+        # Configuration 1: Default with PSM 6 (uniform block of text)
+        try:
+            text1 = pytesseract.image_to_string(
+                processed_image, 
+                lang="eng",
+                config='--psm 6 --oem 3'
+            )
+            if text1.strip():
+                texts.append(text1)
+        except:
+            pass
+        
+        # Configuration 2: PSM 11 (sparse text - single text line)
+        try:
+            text2 = pytesseract.image_to_string(
+                processed_image,
+                lang="eng",
+                config='--psm 11 --oem 3'
+            )
+            if text2.strip() and text2 not in texts:
+                texts.append(text2)
+        except:
+            pass
+        
+        # Configuration 3: PSM 3 (fully automatic page segmentation)
+        try:
+            text3 = pytesseract.image_to_string(
+                processed_image,
+                lang="eng",
+                config='--psm 3 --oem 3'
+            )
+            if text3.strip() and text3 not in texts:
+                texts.append(text3)
+        except:
+            pass
+        
+        # Combine all results, prioritizing longer/more complete text
+        if texts:
+            # Use the text with most content
+            text = max(texts, key=len)
+        else:
+            # Fallback to basic OCR
+            text = pytesseract.image_to_string(processed_image, lang="eng")
         
         # Clean up whitespace
         text = text.strip()
