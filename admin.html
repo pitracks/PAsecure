@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PASecure Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js" 
+            onerror="console.warn('Chart.js failed to load from CDN, charts will be disabled')"></script>
+</head>
+<body>
+    <!-- Admin Header -->
+    <header class="admin-header">
+        <div class="container">
+            <div class="admin-logo">
+                <div class="city-logo-text">
+                    <div class="logo-line-1">LUNGSOD NG</div>
+                    <div class="logo-line-2">PASIG</div>
+                    <div class="logo-line-3">UMAAGOS ANG PAG-ASA</div>
+                </div>
+                <div class="admin-title">
+                    <h1>PASecure Admin</h1>
+                    <p>System Management Dashboard</p>
+                </div>
+            </div>
+            <div class="admin-actions">
+                <button class="btn btn-secondary" onclick="window.open('index.html', '_blank')">
+                    <i class="fas fa-external-link-alt"></i>
+                    View Public Site
+                </button>
+                <div class="admin-user">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Admin User</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Admin Layout -->
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <nav class="admin-nav">
+                <a href="#dashboard" class="admin-nav-link active" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+                <a href="#verifications" class="admin-nav-link" data-section="verifications">
+                    <i class="fas fa-search"></i>
+                    Verifications
+                </a>
+                <a href="#analytics" class="admin-nav-link" data-section="analytics">
+                    <i class="fas fa-chart-bar"></i>
+                    Analytics
+                </a>
+                <a href="#users" class="admin-nav-link" data-section="users">
+                    <i class="fas fa-users"></i>
+                    Users
+                </a>
+                <a href="#settings" class="admin-nav-link" data-section="settings">
+                    <i class="fas fa-cog"></i>
+                    Settings
+                </a>
+                <a href="#logs" class="admin-nav-link" data-section="logs">
+                    <i class="fas fa-file-alt"></i>
+                    System Logs
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="admin-section active">
+                <div class="section-header">
+                    <h2>Dashboard Overview</h2>
+                    <p>Real-time monitoring of PASecure system performance</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalVerifications">0</h3>
+                            <p>Total Verifications</p>
+                            <span class="stat-change positive">+12.5%</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="successRate">0.0%</h3>
+                            <p>Success Rate</p>
+                            <span class="stat-change positive">+0.3%</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="flaggedIds">0</h3>
+                            <p>Flagged IDs</p>
+                            <span class="stat-change negative">+5</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="avgProcessingTime">0.0s</h3>
+                            <p>Avg. Processing Time</p>
+                            <span class="stat-change positive">-0.2s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="charts-row">
+                    <div class="chart-container">
+                        <h3>Verification Trends</h3>
+                        <canvas id="verificationChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>ID Type Distribution</h3>
+                        <canvas id="idTypeChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="recent-activity">
+                    <h3>Recent Activity</h3>
+                    <div class="activity-list"></div>
+                </div>
+            </section>
+
+            <!-- Verifications Section -->
+            <section id="verifications" class="admin-section">
+                <div class="section-header">
+                    <h2>ID Verifications</h2>
+                    <div class="section-actions">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-download"></i>
+                            Export Data
+                        </button>
+                        <button class="btn btn-secondary">
+                            <i class="fas fa-filter"></i>
+                            Filter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Date Range:</label>
+                        <select>
+                            <option>Last 24 hours</option>
+                            <option>Last 7 days</option>
+                            <option>Last 30 days</option>
+                            <option>Custom range</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Status:</label>
+                        <select>
+                            <option>All</option>
+                            <option>Verified</option>
+                            <option>Flagged</option>
+                            <option>Failed</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>ID Type:</label>
+                        <select>
+                            <option>All</option>
+                            <option>Senior Citizen</option>
+                            <option>PWD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Verifications Table -->
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID Number</th>
+                                <th>Holder Name</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Confidence</th>
+                                <th>Date/Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Analytics Section -->
+            <section id="analytics" class="admin-section">
+                <div class="section-header">
+                    <h2>Analytics & Reports</h2>
+                    <div class="section-actions">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-file-pdf"></i>
+                            Generate Report
+                        </button>
+                    </div>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <h3>Daily Verification Volume</h3>
+                        <canvas id="dailyVolumeChart"></canvas>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Success Rate by ID Type</h3>
+                        <canvas id="successRateChart"></canvas>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Processing Time Distribution</h3>
+                        <canvas id="processingTimeChart"></canvas>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Geographic Distribution</h3>
+                        <div class="geo-stats">
+                            <div class="geo-item">
+                                <span class="geo-bar" style="width: 85%"></span>
+                                <span>Barangay San Antonio - 85%</span>
+                            </div>
+                            <div class="geo-item">
+                                <span class="geo-bar" style="width: 65%"></span>
+                                <span>Barangay Kapitolyo - 65%</span>
+                            </div>
+                            <div class="geo-item">
+                                <span class="geo-bar" style="width: 45%"></span>
+                                <span>Barangay Manggahan - 45%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users" class="admin-section">
+                <div class="section-header">
+                    <h2>User Management</h2>
+                    <div class="section-actions">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Add User
+                        </button>
+                    </div>
+                </div>
+
+                <div class="users-grid">
+                    <div class="user-card">
+                        <div class="user-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="user-info">
+                            <h4>Admin User</h4>
+                            <p>admin@pasig.gov.ph</p>
+                            <span class="user-role">Super Admin</span>
+                        </div>
+                        <div class="user-actions">
+                            <button class="btn-icon" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="admin-section">
+                <div class="section-header">
+                    <h2>System Settings</h2>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>CNN Model Settings</h3>
+                        <div class="setting-item">
+                            <label>Confidence Threshold</label>
+                            <input type="range" min="0" max="100" value="80" id="confidenceThreshold">
+                            <span id="thresholdValue">80%</span>
+                        </div>
+                        <div class="setting-item">
+                            <label>Processing Timeout (seconds)</label>
+                            <input type="number" value="30" min="10" max="120">
+                        </div>
+                        <div class="setting-item">
+                            <label>Auto-flag Low Confidence</label>
+                            <input type="checkbox" checked>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Security Settings</h3>
+                        <div class="setting-item">
+                            <label>Enable Two-Factor Authentication</label>
+                            <input type="checkbox" checked>
+                        </div>
+                        <div class="setting-item">
+                            <label>Session Timeout (minutes)</label>
+                            <input type="number" value="30" min="5" max="120">
+                        </div>
+                        <div class="setting-item">
+                            <label>Enable Audit Logging</label>
+                            <input type="checkbox" checked>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Notification Settings</h3>
+                        <div class="setting-item">
+                            <label>Email Notifications</label>
+                            <input type="checkbox" checked>
+                        </div>
+                        <div class="setting-item">
+                            <label>SMS Alerts</label>
+                            <input type="checkbox">
+                        </div>
+                        <div class="setting-item">
+                            <label>Flagged ID Alerts</label>
+                            <input type="checkbox" checked>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs Section -->
+            <section id="logs" class="admin-section">
+                <div class="section-header">
+                    <h2>System Logs</h2>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary">
+                            <i class="fas fa-download"></i>
+                            Export Logs
+                        </button>
+                        <button class="btn btn-danger">
+                            <i class="fas fa-trash"></i>
+                            Clear Logs
+                        </button>
+                    </div>
+                </div>
+
+                <div class="logs-container"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Load configuration and Supabase client first -->
+    <script src="config.js"></script>
+    <!-- Resilient loader for Supabase JS SDK (enables realtime when CDN works) -->
+    <script>
+    (function tryLoad(i){
+        var cdns = [
+            'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.js',
+            'https://unpkg.com/@supabase/supabase-js@2.38.4/dist/umd/supabase.js',
+            'https://cdn.skypack.dev/@supabase/supabase-js@2.38.4'
+        ];
+        if (i >= cdns.length) { console.warn('Supabase SDK failed to load from all CDNs'); return; }
+        var s = document.createElement('script');
+        s.src = cdns[i];
+        s.onload = function(){ console.log('Supabase SDK loaded:', cdns[i]); };
+        s.onerror = function(){ console.warn('Failed:', cdns[i]); tryLoad(i+1); };
+        document.head.appendChild(s);
+    })(0);
+    </script>
+    <script src="supabase-client.js"></script>
+    <script src="admin-script.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+[
+  {
+    "id_type": "senior_citizen",
+    "template_version": "v1",
+    "label": "senior_genuine",
+    "id_number": "SC-2025-104392",
+    "holder_name": "Juan Dela Cruz",
+    "address": "123 Mabini St., Barangay Malinao, Pasig City",
+    "date_of_birth": "1959-11-15",
+    "date_of_issue": "2023-09-30",
+    "valid_until": "2026-09-30",
+    "notes": "Synthetic record for testing"
+  },
+  {
+    "id_type": "senior_citizen",
+    "template_version": "v1",
+    "label": "senior_genuine",
+    "id_number": "SC-2024-781205",
+    "holder_name": "Maria Santos",
+    "address": "45 Luna St., Barangay San Miguel, Pasig City",
+    "date_of_birth": "1958-03-02",
+    "date_of_issue": "2022-12-12",
+    "valid_until": "2025-12-12",
+    "notes": "Synthetic record for testing"
+  },
+  {
+    "id_type": "senior_citizen",
+    "template_version": "v1",
+    "label": "senior_counterfeit",
+    "id_number": null,
+    "holder_name": null,
+    "address": null,
+    "date_of_birth": null,
+    "date_of_issue": null,
+    "valid_until": null,
+    "notes": "Counterfeit sample, minimal fields"
+  },
+  {
+    "id_type": "pwd",
+    "template_version": "v1",
+    "label": "pwd_genuine",
+    "id_number": "PWD-2025-552901",
+    "holder_name": "Jose Ramirez",
+    "address": "8 Mabuhay Homes, Barangay Pinagbuhatan, Pasig City",
+    "date_of_birth": "1992-07-21",
+    "date_of_issue": "2024-05-03",
+    "valid_until": "2027-05-03",
+    "notes": "Synthetic record for testing"
+  },
+  {
+    "id_type": "pwd",
+    "template_version": "v1",
+    "label": "pwd_counterfeit",
+    "id_number": null,
+    "holder_name": null,
+    "address": null,
+    "date_of_birth": null,
+    "date_of_issue": null,
+    "valid_until": null,
+    "notes": "Counterfeit sample, minimal fields"
+  }
+]
+
