@@ -120,6 +120,48 @@ The system uses a custom Supabase client (`supabase-client.js`) with methods for
 - Instant log monitoring
 - Live activity feeds
 
+## GitHub Actions Setup (OCR Worker)
+
+The OCR worker is automatically triggered via GitHub Actions every 5 minutes to process pending ID verifications.
+
+### Setting Up GitHub Secrets
+
+1. Go to your GitHub repository: `https://github.com/pitracks/PAsecure`
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret** and add the following:
+
+   - **Name**: `SUPABASE_URL`
+     - **Value**: Your Supabase project URL (e.g., `https://xxxxx.supabase.co`)
+     - Found in: Supabase Dashboard → Project Settings → API → Project URL
+
+   - **Name**: `SUPABASE_SERVICE_ROLE_KEY`
+     - **Value**: Your Supabase service role key (⚠️ Keep this secret!)
+     - Found in: Supabase Dashboard → Project Settings → API → Service Role Key
+     - ⚠️ **Warning**: This key bypasses Row Level Security. Never expose it in client-side code.
+
+4. Click **Add secret** for each one.
+
+### Workflow File
+
+The workflow file (`.github/workflows/ocr-worker.yml`) is already configured to:
+- Run every 5 minutes automatically
+- Trigger the Supabase Edge Function `ocr-worker`
+- Process one pending verification per run
+
+### Manual Trigger
+
+You can also manually trigger the workflow:
+1. Go to **Actions** tab in GitHub
+2. Select **Trigger OCR Worker**
+3. Click **Run workflow**
+
+### Verifying Setup
+
+After pushing to GitHub:
+1. Check the **Actions** tab to see if the workflow runs
+2. Monitor Supabase Edge Function logs for processing activity
+3. Check your `verifications` table for updated `ocr_status` values
+
 ## Security Features
 
 - **Authentication**: Secure admin login system
