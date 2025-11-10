@@ -12,10 +12,19 @@ jobs:
     steps:
       - name: Trigger OCR Worker
         run: |
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          # Remove trailing slash if present
+          SUPABASE_URL="${SUPABASE_URL%/}"
+          # Ensure it starts with https://
+          if [[ ! "$SUPABASE_URL" =~ ^https?:// ]]; then
+            echo "Error: SUPABASE_URL must start with https://"
+            exit 1
+          fi
+          echo "Calling: ${SUPABASE_URL}/functions/v1/ocr-worker"
           curl -X POST \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/ocr-worker"
+            "${SUPABASE_URL}/functions/v1/ocr-worker"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
