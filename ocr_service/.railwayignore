@@ -1,0 +1,7 @@
+# Ignore everything except OCR service files
+../*
+!app.py
+!requirements.txt
+!Dockerfile
+!.railwayignore
+

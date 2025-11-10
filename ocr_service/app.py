@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from PIL import Image
 import pytesseract
 
-app = FastAPI(title="PASecure OCR Service")
+app = FastAPI(title="PASecure OCR Service", docs_url="/docs", redoc_url="/redoc")
 
 # Configure CORS
 app.add_middleware(
@@ -16,6 +16,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Root route - redirect to health or return service info
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "PASecure OCR Service",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "ocr": "/ocr",
+            "docs": "/docs"
+        }
+    }
 
 # Configure Tesseract path (for Windows/local dev)
 if os.name == 'nt':  # Windows
