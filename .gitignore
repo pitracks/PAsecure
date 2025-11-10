@@ -1,2 +1,7 @@
 
 .venv/
+
+.venv/
+saved_model/
+web_model/*.bin
+*.pb
