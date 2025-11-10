@@ -485,7 +485,10 @@ async function processFile(file) {
             const updateResult = await window.supabaseClient.updateVerification(verification.id, supabasePayload);
             console.log('Database update result:', updateResult);
             
-            await window.supabaseClient.createLog('info', `CNN result ${modelResults.status} (${modelResults.confidence_score}%)`, { verification_id: verification.id });
+            // Log result (non-blocking - errors won't break the flow)
+            window.supabaseClient.createLog('info', `CNN result ${modelResults.status} (${modelResults.confidence_score}%)`, { verification_id: verification.id }).catch(err => {
+                console.warn('Failed to log CNN result (non-critical):', err);
+            });
             
             // Store verification ID - we'll wait for OCR before showing results
             currentProcessingVerificationId = verification.id;
@@ -548,11 +551,14 @@ async function processFile(file) {
             await window.supabaseClient.updateVerification(verification.id, {
                 status: 'failed'
             });
-                await window.supabaseClient.createLog(
-                'error',
-                `CNN analysis failed: ${cnnErr?.message || cnnErr}`,
-                { verification_id: verification.id }
-            );
+                // Log error (non-blocking)
+                window.supabaseClient.createLog(
+                    'error',
+                    `CNN analysis failed: ${cnnErr?.message || cnnErr}`,
+                    { verification_id: verification.id }
+                ).catch(err => {
+                    console.warn('Failed to log error (non-critical):', err);
+                });
             showNotification('AI analysis failed. Please try again later.', 'error');
             throw cnnErr;
         }

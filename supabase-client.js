@@ -332,20 +332,38 @@ class SupabaseClient {
 
     // System logs methods
     async createLog(level, message, context = {}) {
-        if (!this.initialized) throw new Error('Supabase client not initialized');
-        
-        const payload = [{ level, message, context }];
-        if (this.supabase) {
-            const { data, error } = await this.supabase
-                .from('system_logs')
-                .insert(payload)
-                .select()
-                .single();
-            if (error) throw error;
-            return data;
+        // Make logging non-blocking - don't throw errors that break the main flow
+        try {
+            if (!this.initialized) {
+                console.warn('Supabase client not initialized, skipping log');
+                return null;
+            }
+            
+            const payload = [{ level, message, context }];
+            if (this.supabase) {
+                const { data, error } = await this.supabase
+                    .from('system_logs')
+                    .insert(payload)
+                    .select()
+                    .single();
+                if (error) {
+                    console.warn('Failed to create log via SDK:', error.message);
+                    return null;
+                }
+                return data;
+            }
+            try {
+                const res = await this.restRequest('/rest/v1/system_logs', 'POST', payload, { preferReturn: true });
+                return Array.isArray(res) ? res[0] : res;
+            } catch (restError) {
+                console.warn('Failed to create log via REST:', restError.message);
+                return null;
+            }
+        } catch (error) {
+            // Silently fail - logging should never break the main application flow
+            console.warn('Logging failed (non-critical):', error.message);
+            return null;
         }
-        const res = await this.restRequest('/rest/v1/system_logs', 'POST', payload, { preferReturn: true });
-        return Array.isArray(res) ? res[0] : res;
     }
 
     async getSystemLogs(limit = 100, offset = 0) {
