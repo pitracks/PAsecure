@@ -51,24 +51,32 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     # Convert to grayscale for better contrast
     image = image.convert('L')
     
-    # Enhance contrast
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.0)  # Increase contrast by 2x
-    
-    # Enhance sharpness
-    enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(2.0)  # Increase sharpness by 2x
-    
-    # Apply slight denoising
-    image = image.filter(ImageFilter.MedianFilter(size=3))
-    
     # Resize if too small (Tesseract works better with larger images)
+    # Do this early to improve subsequent processing
     width, height = image.size
-    if width < 800 or height < 600:
-        scale = max(800 / width, 600 / height)
+    if width < 1200 or height < 900:
+        scale = max(1200 / width, 900 / height)
         new_width = int(width * scale)
         new_height = int(height * scale)
         image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    
+    # Apply aggressive contrast enhancement
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(3.0)  # Increase contrast by 3x
+    
+    # Enhance brightness to make text more visible
+    enhancer = ImageEnhance.Brightness(image)
+    image = enhancer.enhance(1.2)  # Slightly brighter
+    
+    # Enhance sharpness
+    enhancer = ImageEnhance.Sharpness(image)
+    image = enhancer.enhance(3.0)  # Increase sharpness by 3x
+    
+    # Apply denoising (median filter)
+    image = image.filter(ImageFilter.MedianFilter(size=3))
+    
+    # Apply unsharp mask for better edge definition
+    image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     
     return image
 

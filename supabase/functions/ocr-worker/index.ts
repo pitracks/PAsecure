@@ -117,63 +117,119 @@ Deno.serve(async (req) => {
 
     const { text } = await ocrResponse.json() as { text: string }
 
+    // Normalize text: fix common OCR errors
+    let normalizedText = text
+      .replace(/Narne/gi, 'Name')  // Fix "Narne" -> "Name"
+      .replace(/Narne:/gi, 'Name:')
+      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .replace(/_+/g, '')  // Remove underscores (common in ID numbers)
+
     // Improved parsing with multiple patterns and better handling
     let idNumber: string | null = null
     let holderName: string | null = null
+    let idType: string | null = null
     
-    // Try multiple patterns for ID number
+    // Detect ID type first
+    if (normalizedText.match(/Senior\s+Citizens?\s+Affairs/i) || 
+        normalizedText.match(/OSCA/i) ||
+        normalizedText.match(/Senior\s+Citizen/i)) {
+      idType = 'senior_citizen'
+    } else if (normalizedText.match(/PWD|Person\s+with\s+Disability/i)) {
+      idType = 'pwd'
+    }
+    
+    // Try multiple patterns for ID number (handle underscores, spaces, etc.)
     const idPatterns = [
+      /ID\s*No\.?:?\s*[_\s]*([0-9]{4,})/i,  // ID No.: _22135 or ID No. 22135
       /ID\s*No\.?:?\s*([A-Z0-9\-]+)/i,
-      /ID\s*Number[:\s]*([A-Z0-9\-]+)/i,
-      /ID[:\s]*([A-Z0-9\-]{4,})/i,
-      /(?:^|\n)\s*([0-9]{4,})\s*(?:\n|$)/  // Standalone number (4+ digits)
+      /ID\s*Number[:\s]*[_\s]*([0-9]{4,})/i,
+      /ID[:\s]*[_\s]*([0-9]{4,})/i,
+      /(?:^|\n)\s*[_\s]*([0-9]{4,})\s*(?:\n|$)/,  // Standalone number (4+ digits, may have underscore)
+      /_([0-9]{4,})/,  // Number after underscore
     ]
     
     for (const pattern of idPatterns) {
-      const match = text.match(pattern)
+      const match = normalizedText.match(pattern)
       if (match && match[1]) {
-        idNumber = match[1].trim()
-        break
+        // Clean the ID number (remove any remaining non-digits except hyphens)
+        idNumber = match[1].replace(/[^0-9\-]/g, '').trim()
+        if (idNumber.length >= 4) {
+          break
+        }
       }
     }
     
-    // Try multiple patterns for name
-    // Look for "Name:" followed by text (handles various formats)
+    // Try multiple patterns for name (handle "Narne" typo and garbled text)
     const namePatterns = [
-      /Name[:\s]+([A-Z][A-Z\s\.\',-]{3,})/i,  // Name: followed by uppercase text
-      /Name[:\s]+([A-Z][A-Za-z\s\.\',-]{3,})/i,  // Name: followed by mixed case
-      /(?:^|\n)\s*([A-Z][A-Z\s\.]{2,}[A-Z])\s*(?:\n|Address|Date|$)/i,  // Standalone uppercase name
-      /([A-Z]{2,}\s+[A-Z][A-Z\s\.\',-]{2,})/  // Pattern: LASTNAME Firstname
+      /Name[:\s]+([A-Z][A-Z\s\.\',-]{5,})/i,  // Name: followed by uppercase text
+      /Name[:\s]+([A-Z][A-Za-z\s\.\',-]{5,})/i,  // Name: followed by mixed case
+      /Name[:\s]+([A-Z]{2,}\s+[A-Z][A-Z\s\.\',-]{2,})/i,  // Name: LASTNAME Firstname
     ]
     
     // First, try to find name after "Name:" label
     for (const pattern of namePatterns) {
-      const match = text.match(pattern)
+      const match = normalizedText.match(pattern)
       if (match && match[1]) {
-        const candidate = match[1].trim()
+        let candidate = match[1].trim()
+        // Clean up the name (remove extra spaces, fix common OCR errors)
+        candidate = candidate.replace(/\s+/g, ' ').trim()
+        
         // Filter out common false positives
-        if (!candidate.match(/^(Republic|Office|Pasig|City|Philippines|Date|ID|No|Address)$/i) &&
-            candidate.length >= 3 &&
-            /[A-Za-z]/.test(candidate)) {
+        if (!candidate.match(/^(Republic|Office|Pasig|City|Philippines|Date|ID|No|Address|Senior|Citizens|Affairs|Address741)$/i) &&
+            candidate.length >= 5 &&
+            /[A-Za-z]/.test(candidate) &&
+            candidate.split(/\s+/).length >= 2) {
           holderName = candidate
           break
         }
       }
     }
     
-    // If name not found, try to extract from lines that look like names
+    // If name not found, try to extract from lines near "Name" or "Narne"
     if (!holderName) {
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-      for (const line of lines) {
-        // Look for lines that look like names (2-4 words, mostly uppercase, after "Name:" context)
-        const nameLikePattern = /^([A-Z][A-Z\s\.\',-]{5,})$/i
-        if (nameLikePattern.test(line) && 
-            !line.match(/^(Republic|Office|Pasig|City|Philippines|Date|ID|No|Address|Senior|Citizens|Affairs)$/i) &&
-            line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5) {
-          holderName = line.trim()
-          break
+      const lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      let foundNameLabel = false
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        
+        // Check if this line contains "Name" or "Narne"
+        if (line.match(/Name|Narne/i)) {
+          foundNameLabel = true
+          // Look at next 2 lines for the actual name
+          for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+            const nameLine = lines[j]
+            // Look for lines that look like names
+            if (nameLine.match(/^[A-Z][A-Z\s\.\',-]{5,}$/i) &&
+                !nameLine.match(/^(Republic|Office|Pasig|City|Philippines|Date|ID|No|Address|Senior|Citizens|Affairs|ONO|Address741|Date of|VAD|CARD|WOmalet)$/i) &&
+                nameLine.split(/\s+/).length >= 2 && 
+                nameLine.split(/\s+/).length <= 6) {
+              holderName = nameLine.trim().replace(/\s+/g, ' ')
+              break
+            }
+          }
+          if (holderName) break
         }
       }
+      
+      // If still not found, look for patterns like "RO PLPANGLMRAE" (garbled names)
+      if (!holderName) {
+        for (const line of lines) {
+          // Pattern: 2-4 words, mostly uppercase letters, may have garbled characters
+          if (line.match(/^[A-Z][A-Z\s]{4,}$/i) &&
+              line.split(/\s+/).length >= 2 &&
+              line.split(/\s+/).length <= 5 &&
+              !line.match(/^(Republic|Office|Pasig|City|Philippines|Date|ID|No|Address|Senior|Citizens|Affairs|ONO|Address741|Date of|VAD|CARD|WOmalet|reo|of te|PP mae ve)$/i)) {
+            holderName = line.trim().replace(/\s+/g, ' ')
+            break
+          }
+        }
+      }
+    }
+    
+    // Clean up extracted name (remove trailing dashes, extra spaces)
+    if (holderName) {
+      holderName = holderName.replace(/\s*-\s*$/, '').replace(/\s+/g, ' ').trim()
     }
 
     await supabase
@@ -182,7 +238,8 @@ Deno.serve(async (req) => {
         ocr_status: 'complete',
         ocr_text: text,
         detected_id_number: idNumber,
-        detected_holder_name: holderName
+        detected_holder_name: holderName,
+        detected_id_type: idType || null  // Update ID type if detected
       })
       .eq('id', verification.id)
 
