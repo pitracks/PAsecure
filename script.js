@@ -472,7 +472,7 @@ async function waitForTensorFlow() {
     let attempts = 0;
     const maxAttempts = 50; // 5 seconds max wait
     
-    while (typeof window.tf === 'undefined' && attempts < maxAttempts) {
+    while ((typeof window.tf === 'undefined' || !window.tfReady) && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
     }
@@ -487,7 +487,16 @@ async function waitForTensorFlow() {
         window.tf = window.tf; // Ensure it's accessible
     }
     
+    // Wait for loadGraphModel to be available
+    let apiAttempts = 0;
+    while ((!window.tf.loadGraphModel && !window.tf.loadLayersModel) && apiAttempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        apiAttempts++;
+    }
+    
     console.log('TensorFlow.js detected, version:', window.tf?.version || 'unknown');
+    console.log('loadGraphModel available:', typeof window.tf?.loadGraphModel);
+    console.log('loadLayersModel available:', typeof window.tf?.loadLayersModel);
     return true;
 }
 

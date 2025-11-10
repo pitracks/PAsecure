@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Allow unsafe-eval for TensorFlow.js -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
     <title>PASecure - ID Verification System</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -387,6 +389,7 @@
     <script src="config.js"></script>
     <!-- TensorFlow.js for on-device CNN inference -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"
+            onload="console.log('TensorFlow.js loaded, version:', window.tf?.version || 'unknown'); window.tfReady = true;"
             onerror="console.warn('TF.js failed to load; AI analysis unavailable')"></script>
     <!-- Resilient loader for Supabase JS SDK (enables realtime when CDN works) -->
     <script>
