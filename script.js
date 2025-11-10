@@ -958,6 +958,56 @@ window.checkVerificationStatus = checkVerificationStatus;
 function displayResults(results) {
     const resultsSection = document.getElementById('resultsSection');
     
+    if (!resultsSection) {
+        console.error('Results section not found');
+        return;
+    }
+    
+    // Restore the results section HTML structure if it was replaced by processing message
+    if (!document.getElementById('scoreValue')) {
+        resultsSection.innerHTML = `
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>Verification Results</h3>
+                    <div class="confidence-score" id="confidenceScore">
+                        <span class="score-label">Confidence:</span>
+                        <span class="score-value" id="scoreValue">--%</span>
+                    </div>
+                </div>
+                <div class="result-content">
+                    <div class="verification-status" id="verificationStatus">
+                        <i class="fas fa-info-circle status-icon"></i>
+                        <h4>Awaiting Results</h4>
+                        <p>Your verification result will appear here</p>
+                    </div>
+                    <div class="id-details" id="idDetails">
+                        <h5>Detected Information:</h5>
+                        <ul>
+                            <li><strong>Type:</strong> <span id="idType">—</span></li>
+                            <li><strong>ID Number:</strong> <span id="idNumber">—</span></li>
+                            <li><strong>Name:</strong> <span id="holderName">—</span></li>
+                            <li><strong>Validity:</strong> <span id="validity">—</span></li>
+                        </ul>
+                    </div>
+                    <div class="security-features">
+                        <h5>Security Features Detected:</h5>
+                        <div class="features-grid"></div>
+                    </div>
+                </div>
+                <div class="result-actions">
+                    <button class="btn btn-primary" onclick="verifyAnother()">
+                        <i class="fas fa-plus"></i>
+                        Verify Another ID
+                    </button>
+                    <button class="btn btn-secondary" onclick="downloadReport()">
+                        <i class="fas fa-download"></i>
+                        Download Report
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
     // Store verification ID for realtime updates
     if (results.verification_id) {
         resultsSection.dataset.verificationId = results.verification_id;
@@ -969,6 +1019,19 @@ function displayResults(results) {
     const idNumber = document.getElementById('idNumber');
     const holderName = document.getElementById('holderName');
     const validity = document.getElementById('validity');
+    
+    // Check if all required elements exist
+    if (!confidenceScore || !verificationStatus || !idType || !idNumber || !holderName || !validity) {
+        console.error('Required DOM elements not found:', {
+            confidenceScore: !!confidenceScore,
+            verificationStatus: !!verificationStatus,
+            idType: !!idType,
+            idNumber: !!idNumber,
+            holderName: !!holderName,
+            validity: !!validity
+        });
+        return;
+    }
     
     // Update confidence score
     const confidence = results.confidence_score || 0;
