@@ -63,6 +63,9 @@ async function initializeSupabase() {
         // Setup real-time subscriptions
         setupRealTimeSubscriptions();
         
+        // Wait for TensorFlow.js to load, then load the model
+        await waitForTensorFlow();
+        
         // Load TensorFlow.js model so it's ready before first verification
         try {
             await loadTfModel();
@@ -464,19 +467,77 @@ async function processFile(file) {
     }
 }
 // ===================== CNN (TF.js) Inference =====================
+async function waitForTensorFlow() {
+    // Wait for TensorFlow.js to be loaded from CDN
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds max wait
+    
+    while (typeof window.tf === 'undefined' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (typeof window.tf === 'undefined') {
+        console.warn('TensorFlow.js not loaded after waiting. It may still load later.');
+        return false;
+    }
+    
+    // Make tf available globally
+    if (typeof tf === 'undefined' && typeof window.tf !== 'undefined') {
+        window.tf = window.tf; // Ensure it's accessible
+    }
+    
+    console.log('TensorFlow.js detected, version:', window.tf?.version || 'unknown');
+    return true;
+}
+
 async function loadTfModel() {
     if (tfModel) return tfModel;
-    if (typeof tf === 'undefined') {
-        throw new Error('TensorFlow.js not loaded');
+    
+    // Use window.tf if tf is not available globally
+    const tf = window.tf || (typeof tf !== 'undefined' ? tf : null);
+    
+    if (!tf) {
+        throw new Error('TensorFlow.js not loaded. Please refresh the page.');
     }
+    
+    // Wait a bit for TensorFlow.js to fully initialize
+    let attempts = 0;
+    while ((!tf.loadGraphModel && !tf.loadLayersModel) && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (typeof tf.loadGraphModel === 'undefined' && typeof tf.loadLayersModel === 'undefined') {
+        throw new Error('TensorFlow.js API not available. Please refresh the page.');
+    }
+    
     const url = './web_model/model.json';
     try {
-        console.log('Loading TensorFlow.js GraphModel from:', url);
+        console.log('Loading TensorFlow.js model from:', url);
+        console.log('TensorFlow.js version:', tf.version);
+        console.log('Available load functions:', {
+            loadGraphModel: typeof tf.loadGraphModel,
+            loadLayersModel: typeof tf.loadLayersModel
+        });
+        
+        // Try loadGraphModel first (for SavedModel format)
+        if (typeof tf.loadGraphModel === 'function') {
             tfModel = await tf.loadGraphModel(url);
-        console.log('✅ TensorFlow.js model loaded successfully (GraphModel)!');
+            console.log('✅ TensorFlow.js model loaded successfully (GraphModel)!');
+        } 
+        // Fallback to loadLayersModel (for Keras format)
+        else if (typeof tf.loadLayersModel === 'function') {
+            tfModel = await tf.loadLayersModel(url);
+            console.log('✅ TensorFlow.js model loaded successfully (LayersModel)!');
+        } 
+        else {
+            throw new Error('No TensorFlow.js model loader available');
+        }
+        
         return tfModel;
     } catch (e) {
-        console.warn('❌ Failed to load TensorFlow.js model:', e.message);
+        console.error('❌ Failed to load TensorFlow.js model:', e);
         throw new Error('TF.js model not found at ' + url + ': ' + e.message);
     }
 }
@@ -485,6 +546,13 @@ function preprocessImageToTensor(imgOrFile, target = 224) {
     return new Promise(async (resolve, reject) => {
         try {
             if (!(imgOrFile instanceof Blob)) return reject(new Error('Expected Blob/File'));
+            
+            // Get tf reference
+            const tf = window.tf || (typeof tf !== 'undefined' ? tf : null);
+            if (!tf) {
+                return reject(new Error('TensorFlow.js not loaded'));
+            }
+            
             const url = URL.createObjectURL(imgOrFile);
             const img = new Image();
             img.onload = () => {
@@ -503,9 +571,11 @@ function preprocessImageToTensor(imgOrFile, target = 224) {
 }
 
 async function runCNNAnalysis(file) {
-        if (typeof tf === 'undefined') {
-            throw new Error('TensorFlow.js not loaded');
-        }
+    // Get tf reference
+    const tf = window.tf || (typeof tf !== 'undefined' ? tf : null);
+    if (!tf) {
+        throw new Error('TensorFlow.js not loaded');
+    }
         
     const model = await loadTfModel();
     const tensor = await preprocessImageToTensor(file, 224);
