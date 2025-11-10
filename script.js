@@ -6,6 +6,7 @@ let isProcessing = false;
 let mediaStream = null;
 let currentUser = null;
 let verificationSubscription = null;
+let currentProcessingVerificationId = null; // Track verification waiting for OCR
 let tfModel = null;
 const CLASS_LABELS = [
     'senior_genuine',
@@ -109,30 +110,49 @@ async function loadSystemSettings() {
 function setupRealTimeSubscriptions() {
     try {
         // Subscribe to verification updates
-        verificationSubscription = window.supabaseClient.subscribeToVerifications((payload) => {
+        verificationSubscription = window.supabaseClient.subscribeToVerifications(async (payload) => {
             console.log('Verification update received:', payload);
             
-            // Handle OCR completion
+            // Handle OCR completion - fetch full data and display results
             if (payload.eventType === 'UPDATE' && payload.new.ocr_status === 'complete') {
-                console.log('OCR completed, updating UI with extracted data:', payload.new);
+                console.log('OCR completed (via realtime), fetching full verification data');
                 
-                // Update the displayed results with OCR data
-                const resultsSection = document.getElementById('resultsSection');
-                const storedVerificationId = resultsSection?.dataset?.verificationId;
-                
-                if (storedVerificationId === payload.new.id) {
-                    // Update the UI elements with correct selectors
-                    const idNumberEl = document.getElementById('idNumber');
-                    const nameEl = document.getElementById('holderName');
-                    
-                    if (idNumberEl && payload.new.detected_id_number) {
-                        idNumberEl.textContent = payload.new.detected_id_number;
+                // Check if this is the verification we're waiting for
+                if (currentProcessingVerificationId === payload.new.id) {
+                    // Fetch the complete verification record with all data
+                    try {
+                        const { data: fullVerification, error: fetchError } = await window.supabaseClient.supabase
+                            .from('verifications')
+                            .select('*')
+                            .eq('id', payload.new.id)
+                            .single();
+                        
+                        if (fetchError) {
+                            console.error('Error fetching full verification:', fetchError);
+                            showNotification('OCR completed but failed to load results', 'error');
+                            return;
+                        }
+                        
+                        // Convert database record to display format
+                        const results = {
+                            verification_id: fullVerification.id,
+                            status: fullVerification.status || 'flagged',
+                            confidence_score: fullVerification.confidence_score || 0,
+                            detected_id_type: fullVerification.detected_id_type,
+                            detected_id_number: fullVerification.detected_id_number,
+                            detected_holder_name: fullVerification.detected_holder_name,
+                            security_features: fullVerification.security_features || [],
+                            processing_time_ms: fullVerification.processing_time_ms || 0
+                        };
+                        
+                        console.log('Displaying complete verification results (realtime):', results);
+                        displayResults(results);
+                        showNotification('Verification complete! All details extracted.', 'success');
+                        currentProcessingVerificationId = null;
+                    } catch (err) {
+                        console.error('Error processing OCR completion:', err);
+                        showNotification('Error loading verification results', 'error');
                     }
-                    if (nameEl && payload.new.detected_holder_name) {
-                        nameEl.textContent = payload.new.detected_holder_name;
-                    }
-                    
-                    showNotification('OCR processing completed - ID details extracted', 'success');
                 }
             }
             
@@ -467,11 +487,26 @@ async function processFile(file) {
             
             await window.supabaseClient.createLog('info', `CNN result ${modelResults.status} (${modelResults.confidence_score}%)`, { verification_id: verification.id });
             
-            // Store verification ID for realtime updates
-            modelResults.verification_id = verification.id;
-            displayResults(modelResults);
+            // Store verification ID - we'll wait for OCR before showing results
+            currentProcessingVerificationId = verification.id;
             
-            // Start polling for OCR results as fallback (in case realtime doesn't work)
+            // Show processing message - results will appear after OCR completes
+            const resultsSection = document.getElementById('resultsSection');
+            if (resultsSection) {
+                resultsSection.innerHTML = `
+                    <div class="processing-message" style="text-align: center; padding: 40px;">
+                        <div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                        <h3>Processing ID...</h3>
+                        <p>CNN analysis complete. Waiting for OCR to extract ID details...</p>
+                        <p style="font-size: 0.9em; color: #666;">This may take a few minutes. Results will appear automatically.</p>
+                    </div>
+                `;
+                resultsSection.dataset.verificationId = verification.id;
+            }
+            
+            showNotification('CNN analysis complete. Waiting for OCR processing...', 'info');
+            
+            // Start polling for OCR results (will call displayResults when complete)
             startOCRPolling(verification.id);
         } catch (cnnErr) {
             console.error('CNN analysis failed:', cnnErr);
@@ -751,23 +786,46 @@ function startOCRPolling(verificationId) {
                 return;
             }
             
-            // If OCR is complete, update the UI
+            // If OCR is complete, fetch full verification and display results
             if (data.ocr_status === 'complete') {
-                console.log('OCR completed (via polling):', data);
-                
-                const idNumberEl = document.getElementById('idNumber');
-                const nameEl = document.getElementById('holderName');
-                
-                if (idNumberEl && data.detected_id_number) {
-                    idNumberEl.textContent = data.detected_id_number;
-                }
-                if (nameEl && data.detected_holder_name) {
-                    nameEl.textContent = data.detected_holder_name;
-                }
-                
-                showNotification('OCR processing completed - ID details extracted', 'success');
+                console.log('OCR completed (via polling), fetching full verification data');
                 clearInterval(ocrPollingInterval);
                 ocrPollingInterval = null;
+                
+                // Fetch the complete verification record with all data
+                try {
+                    const { data: fullVerification, error: fetchError } = await window.supabaseClient.supabase
+                        .from('verifications')
+                        .select('*')
+                        .eq('id', verificationId)
+                        .single();
+                    
+                    if (fetchError) {
+                        console.error('Error fetching full verification:', fetchError);
+                        showNotification('OCR completed but failed to load results', 'error');
+                        return;
+                    }
+                    
+                    // Convert database record to display format
+                    const results = {
+                        verification_id: fullVerification.id,
+                        status: fullVerification.status || 'flagged',
+                        confidence_score: fullVerification.confidence_score || 0,
+                        detected_id_type: fullVerification.detected_id_type,
+                        detected_id_number: fullVerification.detected_id_number,
+                        detected_holder_name: fullVerification.detected_holder_name,
+                        security_features: fullVerification.security_features || [],
+                        processing_time_ms: fullVerification.processing_time_ms || 0
+                    };
+                    
+                    console.log('Displaying complete verification results:', results);
+                    displayResults(results);
+                    showNotification('Verification complete! All details extracted.', 'success');
+                    currentProcessingVerificationId = null;
+                } catch (err) {
+                    console.error('Error processing OCR completion:', err);
+                    showNotification('Error loading verification results', 'error');
+                }
             } else if (data.ocr_status === 'failed') {
                 console.warn('OCR processing failed');
                 clearInterval(ocrPollingInterval);
