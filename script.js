@@ -112,6 +112,30 @@ function setupRealTimeSubscriptions() {
         verificationSubscription = window.supabaseClient.subscribeToVerifications((payload) => {
             console.log('Verification update received:', payload);
             
+            // Handle OCR completion
+            if (payload.eventType === 'UPDATE' && payload.new.ocr_status === 'complete') {
+                console.log('OCR completed, updating UI with extracted data:', payload.new);
+                
+                // Update the displayed results with OCR data
+                const resultsSection = document.getElementById('resultsSection');
+                const storedVerificationId = resultsSection?.dataset?.verificationId;
+                
+                if (storedVerificationId === payload.new.id) {
+                    // Update the UI elements with correct selectors
+                    const idNumberEl = document.getElementById('idNumber');
+                    const nameEl = document.getElementById('holderName');
+                    
+                    if (idNumberEl && payload.new.detected_id_number) {
+                        idNumberEl.textContent = payload.new.detected_id_number;
+                    }
+                    if (nameEl && payload.new.detected_holder_name) {
+                        nameEl.textContent = payload.new.detected_holder_name;
+                    }
+                    
+                    showNotification('OCR processing completed - ID details extracted', 'success');
+                }
+            }
+            
             // Update UI if needed
             if (payload.eventType === 'INSERT' && payload.new.status === 'verified') {
                 showNotification('New verification completed successfully', 'success');
@@ -414,7 +438,8 @@ async function processFile(file) {
             file_path: uploadResult.path,
             file_type: file.type,
             file_size: file.size,
-            status: 'processing'
+            status: 'processing',
+            ocr_status: 'pending'  // Mark for OCR processing
         };
         
         console.log('Creating verification record:', verificationData);
@@ -441,6 +466,9 @@ async function processFile(file) {
             console.log('Database update result:', updateResult);
             
             await window.supabaseClient.createLog('info', `CNN result ${modelResults.status} (${modelResults.confidence_score}%)`, { verification_id: verification.id });
+            
+            // Store verification ID for realtime updates
+            modelResults.verification_id = verification.id;
             displayResults(modelResults);
         } catch (cnnErr) {
             console.error('CNN analysis failed:', cnnErr);
@@ -693,6 +721,12 @@ function updateVerificationSteps(activeStep, status = 'active') {
 // Display Results
 function displayResults(results) {
     const resultsSection = document.getElementById('resultsSection');
+    
+    // Store verification ID for realtime updates
+    if (results.verification_id) {
+        resultsSection.dataset.verificationId = results.verification_id;
+    }
+    
     const confidenceScore = document.getElementById('scoreValue');
     const verificationStatus = document.getElementById('verificationStatus');
     const idType = document.getElementById('idType');
