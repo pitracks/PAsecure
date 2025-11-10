@@ -470,6 +470,9 @@ async function processFile(file) {
             // Store verification ID for realtime updates
             modelResults.verification_id = verification.id;
             displayResults(modelResults);
+            
+            // Start polling for OCR results as fallback (in case realtime doesn't work)
+            startOCRPolling(verification.id);
         } catch (cnnErr) {
             console.error('CNN analysis failed:', cnnErr);
             await window.supabaseClient.updateVerification(verification.id, {
@@ -716,6 +719,72 @@ function updateVerificationSteps(activeStep, status = 'active') {
             step.classList.add(status);
         }
     });
+}
+
+// Poll for OCR results (fallback if realtime doesn't work)
+let ocrPollingInterval = null;
+
+function startOCRPolling(verificationId) {
+    // Clear any existing polling
+    if (ocrPollingInterval) {
+        clearInterval(ocrPollingInterval);
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 24; // Poll for 2 minutes (24 * 5 seconds)
+    
+    ocrPollingInterval = setInterval(async () => {
+        attempts++;
+        
+        try {
+            const { data, error } = await window.supabaseClient.supabase
+                .from('verifications')
+                .select('ocr_status, detected_id_number, detected_holder_name')
+                .eq('id', verificationId)
+                .single();
+            
+            if (error) {
+                console.error('Error polling OCR status:', error);
+                if (attempts >= maxAttempts) {
+                    clearInterval(ocrPollingInterval);
+                }
+                return;
+            }
+            
+            // If OCR is complete, update the UI
+            if (data.ocr_status === 'complete') {
+                console.log('OCR completed (via polling):', data);
+                
+                const idNumberEl = document.getElementById('idNumber');
+                const nameEl = document.getElementById('holderName');
+                
+                if (idNumberEl && data.detected_id_number) {
+                    idNumberEl.textContent = data.detected_id_number;
+                }
+                if (nameEl && data.detected_holder_name) {
+                    nameEl.textContent = data.detected_holder_name;
+                }
+                
+                showNotification('OCR processing completed - ID details extracted', 'success');
+                clearInterval(ocrPollingInterval);
+                ocrPollingInterval = null;
+            } else if (data.ocr_status === 'failed') {
+                console.warn('OCR processing failed');
+                clearInterval(ocrPollingInterval);
+                ocrPollingInterval = null;
+            } else if (attempts >= maxAttempts) {
+                console.log('OCR polling timeout - stopping');
+                clearInterval(ocrPollingInterval);
+                ocrPollingInterval = null;
+            }
+        } catch (err) {
+            console.error('Error in OCR polling:', err);
+            if (attempts >= maxAttempts) {
+                clearInterval(ocrPollingInterval);
+                ocrPollingInterval = null;
+            }
+        }
+    }, 5000); // Poll every 5 seconds
 }
 
 // Display Results
