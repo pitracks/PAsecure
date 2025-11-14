@@ -336,6 +336,9 @@ function initializeSectionFeatures(sectionId) {
         case 'analytics':
             updateAnalyticsCharts();
             break;
+        case 'insights':
+            updateInsights();
+            break;
         case 'verifications':
             // Render using the real data already loaded
             if (Array.isArray(verificationData) && verificationData.length) {
@@ -1386,9 +1389,487 @@ window.refreshData = async function() {
 // Export functions for global access
 window.viewVerificationDetails = viewVerificationDetails;
 window.downloadVerificationReport = downloadVerificationReport;
+window.refreshInsights = refreshInsights;
 window.editUser = function(id) { alert(`Edit user: ${id}`); };
 window.deleteUser = function(id) { 
     if (confirm(`Are you sure you want to delete user ${id}?`)) {
         alert(`User ${id} deleted`);
     }
 };
+
+// ============================================
+// INSIGHTS FUNCTIONS
+// ============================================
+
+// Update Insights Section
+async function updateInsights() {
+    if (!Array.isArray(verificationData) || verificationData.length === 0) {
+        console.log('No verification data available for insights');
+        await loadInitialData();
+    }
+    
+    const insights = calculateInsights(verificationData);
+    displayInsights(insights);
+    updateInsightCharts(insights);
+    generateRecommendations(insights);
+}
+
+// Refresh Insights
+function refreshInsights() {
+    loadInitialData().then(() => {
+        updateInsights();
+        showNotification('Insights refreshed successfully', 'success');
+    });
+}
+
+// Calculate Insights from Verification Data
+function calculateInsights(data) {
+    if (!Array.isArray(data) || data.length === 0) {
+        return getEmptyInsights();
+    }
+    
+    const insights = {
+        // Peak time analysis
+        peakTime: calculatePeakTime(data),
+        
+        // Confidence metrics
+        avgConfidence: calculateAverageConfidence(data),
+        confidenceTrend: calculateConfidenceTrend(data),
+        confidenceDistribution: calculateConfidenceDistribution(data),
+        
+        // Processing metrics
+        avgProcessingTime: calculateAverageProcessingTime(data),
+        fastestProcessing: calculateFastestProcessing(data),
+        slowestProcessing: calculateSlowestProcessing(data),
+        processingTimeDistribution: calculateProcessingTimeDistribution(data),
+        
+        // ID type analysis
+        idTypeStats: calculateIDTypeStats(data),
+        
+        // Status analysis
+        flaggedRate: calculateFlaggedRate(data),
+        verifiedRate: calculateVerifiedRate(data),
+        
+        // Timeline data
+        timelineData: calculateTimelineData(data)
+    };
+    
+    return insights;
+}
+
+// Get Empty Insights (fallback)
+function getEmptyInsights() {
+    return {
+        peakTime: '--:--',
+        avgConfidence: 0,
+        confidenceTrend: { value: 0, direction: 'neutral' },
+        confidenceDistribution: { high: 0, medium: 0, low: 0, veryLow: 0 },
+        avgProcessingTime: 0,
+        fastestProcessing: 0,
+        slowestProcessing: 0,
+        processingTimeDistribution: [],
+        idTypeStats: { senior: 0, pwd: 0, total: 0 },
+        flaggedRate: 0,
+        verifiedRate: 0,
+        timelineData: []
+    };
+}
+
+// Calculate Peak Verification Time
+function calculatePeakTime(data) {
+    const hourCounts = Array(24).fill(0);
+    
+    data.forEach(item => {
+        if (item.created_at) {
+            const date = new Date(item.created_at);
+            const hour = date.getHours();
+            hourCounts[hour]++;
+        }
+    });
+    
+    const maxCount = Math.max(...hourCounts);
+    const peakHour = hourCounts.indexOf(maxCount);
+    
+    return `${String(peakHour).padStart(2, '0')}:00`;
+}
+
+// Calculate Average Confidence
+function calculateAverageConfidence(data) {
+    const confidences = data
+        .filter(item => item.confidence_score != null)
+        .map(item => item.confidence_score);
+    
+    if (confidences.length === 0) return 0;
+    
+    const sum = confidences.reduce((a, b) => a + b, 0);
+    return Math.round(sum / confidences.length);
+}
+
+// Calculate Confidence Trend
+function calculateConfidenceTrend(data) {
+    if (data.length < 2) {
+        return { value: 0, direction: 'neutral', desc: 'Insufficient data' };
+    }
+    
+    // Split data into two halves
+    const mid = Math.floor(data.length / 2);
+    const recent = data.slice(0, mid);
+    const older = data.slice(mid);
+    
+    const recentAvg = calculateAverageConfidence(recent);
+    const olderAvg = calculateAverageConfidence(older);
+    
+    const diff = recentAvg - olderAvg;
+    const percentChange = olderAvg > 0 ? Math.round((diff / olderAvg) * 100) : 0;
+    
+    let direction = 'neutral';
+    let desc = 'No change';
+    
+    if (percentChange > 5) {
+        direction = 'up';
+        desc = `Increased by ${Math.abs(percentChange)}%`;
+    } else if (percentChange < -5) {
+        direction = 'down';
+        desc = `Decreased by ${Math.abs(percentChange)}%`;
+    } else {
+        desc = `Changed by ${Math.abs(percentChange)}%`;
+    }
+    
+    return {
+        value: percentChange,
+        direction: direction,
+        desc: desc
+    };
+}
+
+// Calculate Confidence Distribution
+function calculateConfidenceDistribution(data) {
+    const distribution = { high: 0, medium: 0, low: 0, veryLow: 0 };
+    
+    data.forEach(item => {
+        const score = item.confidence_score || 0;
+        if (score >= 80) distribution.high++;
+        else if (score >= 60) distribution.medium++;
+        else if (score >= 40) distribution.low++;
+        else distribution.veryLow++;
+    });
+    
+    return distribution;
+}
+
+// Calculate Average Processing Time
+function calculateAverageProcessingTime(data) {
+    const times = data
+        .filter(item => item.processing_time_ms != null)
+        .map(item => item.processing_time_ms / 1000); // Convert to seconds
+    
+    if (times.length === 0) return 0;
+    
+    const sum = times.reduce((a, b) => a + b, 0);
+    return (sum / times.length).toFixed(2);
+}
+
+// Calculate Fastest Processing
+function calculateFastestProcessing(data) {
+    const times = data
+        .filter(item => item.processing_time_ms != null)
+        .map(item => item.processing_time_ms / 1000);
+    
+    if (times.length === 0) return 0;
+    return Math.min(...times).toFixed(2);
+}
+
+// Calculate Slowest Processing
+function calculateSlowestProcessing(data) {
+    const times = data
+        .filter(item => item.processing_time_ms != null)
+        .map(item => item.processing_time_ms / 1000);
+    
+    if (times.length === 0) return 0;
+    return Math.max(...times).toFixed(2);
+}
+
+// Calculate ID Type Statistics
+function calculateIDTypeStats(data) {
+    const stats = { senior: 0, pwd: 0, total: data.length };
+    
+    data.forEach(item => {
+        const type = item.detected_id_type || '';
+        if (type.includes('senior')) stats.senior++;
+        else if (type.includes('pwd')) stats.pwd++;
+    });
+    
+    return stats;
+}
+
+// Calculate Flagged Rate
+function calculateFlaggedRate(data) {
+    if (data.length === 0) return 0;
+    const flagged = data.filter(item => item.status === 'flagged').length;
+    return Math.round((flagged / data.length) * 100);
+}
+
+// Calculate Verified Rate
+function calculateVerifiedRate(data) {
+    if (data.length === 0) return 0;
+    const verified = data.filter(item => item.status === 'verified').length;
+    return Math.round((verified / data.length) * 100);
+}
+
+// Calculate Timeline Data (last 7 days)
+function calculateTimelineData(data) {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (6 - i));
+        date.setHours(0, 0, 0, 0);
+        return { date, count: 0 };
+    });
+    
+    data.forEach(item => {
+        if (item.created_at) {
+            const itemDate = new Date(item.created_at);
+            itemDate.setHours(0, 0, 0, 0);
+            
+            const dayIndex = last7Days.findIndex(d => 
+                d.date.getTime() === itemDate.getTime()
+            );
+            
+            if (dayIndex !== -1) {
+                last7Days[dayIndex].count++;
+            }
+        }
+    });
+    
+    return last7Days.map(d => ({
+        label: d.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        count: d.count
+    }));
+}
+
+// Display Insights
+function displayInsights(insights) {
+    // Peak Time
+    document.getElementById('peakTime').textContent = insights.peakTime;
+    
+    // Confidence Trend
+    const trendEl = document.getElementById('confidenceTrend');
+    const trendDescEl = document.getElementById('confidenceTrendDesc');
+    if (insights.confidenceTrend.direction === 'up') {
+        trendEl.textContent = `↑ ${Math.abs(insights.confidenceTrend.value)}%`;
+        trendEl.style.color = '#10b981';
+    } else if (insights.confidenceTrend.direction === 'down') {
+        trendEl.textContent = `↓ ${Math.abs(insights.confidenceTrend.value)}%`;
+        trendEl.style.color = '#ef4444';
+    } else {
+        trendEl.textContent = '→ 0%';
+        trendEl.style.color = '#6b7280';
+    }
+    trendDescEl.textContent = insights.confidenceTrend.desc;
+    
+    // Flagged Rate
+    document.getElementById('flaggedRate').textContent = `${insights.flaggedRate}%`;
+    document.getElementById('flaggedRateDesc').textContent = 
+        `${insights.flaggedRate}% of IDs flagged as suspicious`;
+    
+    // Average Confidence
+    document.getElementById('avgConfidence').textContent = `${insights.avgConfidence}%`;
+    
+    // Processing Times
+    document.getElementById('avgProcessingTime').textContent = `${insights.avgProcessingTime}s`;
+    document.getElementById('fastestProcessing').textContent = `${insights.fastestProcessing}s`;
+    document.getElementById('slowestProcessing').textContent = `${insights.slowestProcessing}s`;
+    
+    // ID Type Stats
+    const idStats = insights.idTypeStats;
+    const total = idStats.total || 1;
+    const seniorPercent = Math.round((idStats.senior / total) * 100);
+    const pwdPercent = Math.round((idStats.pwd / total) * 100);
+    
+    document.getElementById('seniorCount').textContent = idStats.senior;
+    document.getElementById('seniorPercent').textContent = `(${seniorPercent}%)`;
+    document.getElementById('pwdCount').textContent = idStats.pwd;
+    document.getElementById('pwdPercent').textContent = `(${pwdPercent}%)`;
+    
+    const mostCommon = idStats.senior >= idStats.pwd ? 'Senior Citizen' : 'PWD';
+    document.getElementById('mostCommonType').textContent = mostCommon;
+    
+    // Confidence Distribution
+    const dist = insights.confidenceDistribution;
+    const distTotal = dist.high + dist.medium + dist.low + dist.veryLow || 1;
+    
+    const updateBucket = (id, count, total) => {
+        const percent = Math.round((count / total) * 100);
+        document.getElementById(id + 'Bar').style.width = `${percent}%`;
+        document.getElementById(id + 'Count').textContent = count;
+    };
+    
+    updateBucket('highConfidence', dist.high, distTotal);
+    updateBucket('mediumConfidence', dist.medium, distTotal);
+    updateBucket('lowConfidence', dist.low, distTotal);
+    updateBucket('veryLowConfidence', dist.veryLow, distTotal);
+}
+
+// Update Insight Charts
+function updateInsightCharts(insights) {
+    // Processing Time Chart
+    if (typeof Chart !== 'undefined') {
+        const processingCtx = document.getElementById('processingTimeInsightChart');
+        if (processingCtx) {
+            if (charts.processingTimeInsight) {
+                charts.processingTimeInsight.destroy();
+            }
+            charts.processingTimeInsight = new Chart(processingCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-1s', '1-2s', '2-3s', '3-5s', '5s+'],
+                    datasets: [{
+                        label: 'Processing Time Distribution',
+                        data: insights.processingTimeDistribution || [0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        // ID Type Chart
+        const idTypeCtx = document.getElementById('idTypeInsightChart');
+        if (idTypeCtx) {
+            if (charts.idTypeInsight) {
+                charts.idTypeInsight.destroy();
+            }
+            charts.idTypeInsight = new Chart(idTypeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Senior Citizen', 'PWD'],
+                    datasets: [{
+                        data: [insights.idTypeStats.senior, insights.idTypeStats.pwd],
+                        backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(59, 130, 246, 0.8)'],
+                        borderColor: ['rgba(16, 185, 129, 1)', 'rgba(59, 130, 246, 1)'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        // Timeline Chart
+        const timelineCtx = document.getElementById('timelineChart');
+        if (timelineCtx) {
+            if (charts.timeline) {
+                charts.timeline.destroy();
+            }
+            const timelineData = insights.timelineData || [];
+            charts.timeline = new Chart(timelineCtx, {
+                type: 'line',
+                data: {
+                    labels: timelineData.map(d => d.label),
+                    datasets: [{
+                        label: 'Verifications',
+                        data: timelineData.map(d => d.count),
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+    }
+}
+
+// Generate Recommendations
+function generateRecommendations(insights) {
+    const recommendations = [];
+    
+    // Low confidence recommendation
+    if (insights.avgConfidence < 70) {
+        recommendations.push({
+            type: 'warning',
+            icon: 'exclamation-triangle',
+            message: 'Average confidence is below 70%. Consider retraining the CNN model with more data.',
+            action: 'Review training data'
+        });
+    }
+    
+    // High flagged rate
+    if (insights.flaggedRate > 20) {
+        recommendations.push({
+            type: 'warning',
+            icon: 'shield-alt',
+            message: `Flagged rate is ${insights.flaggedRate}%, which is above normal. Review flagged IDs for patterns.`,
+            action: 'Review flagged IDs'
+        });
+    }
+    
+    // Slow processing
+    if (parseFloat(insights.avgProcessingTime) > 5) {
+        recommendations.push({
+            type: 'info',
+            icon: 'clock',
+            message: `Average processing time is ${insights.avgProcessingTime}s. Consider optimizing the model or infrastructure.`,
+            action: 'Optimize processing'
+        });
+    }
+    
+    // Low data volume
+    if (insights.idTypeStats.total < 50) {
+        recommendations.push({
+            type: 'info',
+            icon: 'database',
+            message: 'Limited verification data. More data will improve insights accuracy.',
+            action: 'Collect more data'
+        });
+    }
+    
+    // Good performance
+    if (insights.avgConfidence >= 80 && insights.flaggedRate < 10) {
+        recommendations.push({
+            type: 'success',
+            icon: 'check-circle',
+            message: 'System is performing well with high confidence and low flagged rate.',
+            action: 'Continue monitoring'
+        });
+    }
+    
+    // Display recommendations
+    const recommendationsList = document.getElementById('recommendationsList');
+    if (recommendationsList) {
+        if (recommendations.length === 0) {
+            recommendationsList.innerHTML = `
+                <div class="recommendation-item">
+                    <i class="fas fa-check-circle"></i>
+                    <span>No recommendations at this time. System is operating normally.</span>
+                </div>
+            `;
+        } else {
+            recommendationsList.innerHTML = recommendations.map(rec => `
+                <div class="recommendation-item ${rec.type}">
+                    <i class="fas fa-${rec.icon}"></i>
+                    <div>
+                        <span class="rec-message">${rec.message}</span>
+                        <span class="rec-action">${rec.action}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+}

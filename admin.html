@@ -57,6 +57,10 @@
                     <i class="fas fa-chart-bar"></i>
                     Analytics
                 </a>
+                <a href="#insights" class="admin-nav-link" data-section="insights">
+                    <i class="fas fa-lightbulb"></i>
+                    Insights
+                </a>
                 <a href="#users" class="admin-nav-link" data-section="users">
                     <i class="fas fa-users"></i>
                     Users
@@ -250,6 +254,165 @@
                                 <span>Barangay Manggahan - 45%</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Insights Section -->
+            <section id="insights" class="admin-section">
+                <div class="section-header">
+                    <h2>System Insights</h2>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary" onclick="refreshInsights()">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh Insights
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Key Insights Cards -->
+                <div class="insights-grid">
+                    <div class="insight-card highlight">
+                        <div class="insight-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h3>Peak Verification Time</h3>
+                            <p class="insight-value" id="peakTime">--:--</p>
+                            <p class="insight-desc">Most verifications occur during this hour</p>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h3>Confidence Trend</h3>
+                            <p class="insight-value" id="confidenceTrend">--</p>
+                            <p class="insight-desc" id="confidenceTrendDesc">Compared to last period</p>
+                        </div>
+                    </div>
+
+                    <div class="insight-card warning">
+                        <div class="insight-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h3>Flagged Rate</h3>
+                            <p class="insight-value" id="flaggedRate">0%</p>
+                            <p class="insight-desc" id="flaggedRateDesc">Percentage of IDs flagged as suspicious</p>
+                        </div>
+                    </div>
+
+                    <div class="insight-card success">
+                        <div class="insight-icon">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h3>Average Confidence</h3>
+                            <p class="insight-value" id="avgConfidence">0%</p>
+                            <p class="insight-desc">Across all verified IDs</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Insights -->
+                <div class="insights-detail-grid">
+                    <!-- Processing Insights -->
+                    <div class="insight-detail-card">
+                        <h3><i class="fas fa-tachometer-alt"></i> Processing Performance</h3>
+                        <div class="insight-metric">
+                            <span class="metric-label">Average Processing Time</span>
+                            <span class="metric-value" id="avgProcessingTime">0.0s</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="metric-label">Fastest Processing</span>
+                            <span class="metric-value" id="fastestProcessing">0.0s</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="metric-label">Slowest Processing</span>
+                            <span class="metric-value" id="slowestProcessing">0.0s</span>
+                        </div>
+                        <div class="insight-chart-container">
+                            <canvas id="processingTimeInsightChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ID Type Insights -->
+                    <div class="insight-detail-card">
+                        <h3><i class="fas fa-id-card"></i> ID Type Analysis</h3>
+                        <div class="insight-metric">
+                            <span class="metric-label">Senior Citizen IDs</span>
+                            <span class="metric-value" id="seniorCount">0</span>
+                            <span class="metric-percent" id="seniorPercent">(0%)</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="metric-label">PWD IDs</span>
+                            <span class="metric-value" id="pwdCount">0</span>
+                            <span class="metric-percent" id="pwdPercent">(0%)</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="metric-label">Most Common Type</span>
+                            <span class="metric-value" id="mostCommonType">--</span>
+                        </div>
+                        <div class="insight-chart-container">
+                            <canvas id="idTypeInsightChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Confidence Distribution -->
+                    <div class="insight-detail-card">
+                        <h3><i class="fas fa-percentage"></i> Confidence Score Distribution</h3>
+                        <div class="confidence-buckets">
+                            <div class="bucket">
+                                <span class="bucket-label">High (80-100%)</span>
+                                <div class="bucket-bar">
+                                    <div class="bucket-fill" id="highConfidenceBar" style="width: 0%"></div>
+                                </div>
+                                <span class="bucket-count" id="highConfidenceCount">0</span>
+                            </div>
+                            <div class="bucket">
+                                <span class="bucket-label">Medium (60-79%)</span>
+                                <div class="bucket-bar">
+                                    <div class="bucket-fill" id="mediumConfidenceBar" style="width: 0%"></div>
+                                </div>
+                                <span class="bucket-count" id="mediumConfidenceCount">0</span>
+                            </div>
+                            <div class="bucket">
+                                <span class="bucket-label">Low (40-59%)</span>
+                                <div class="bucket-bar">
+                                    <div class="bucket-fill" id="lowConfidenceBar" style="width: 0%"></div>
+                                </div>
+                                <span class="bucket-count" id="lowConfidenceCount">0</span>
+                            </div>
+                            <div class="bucket">
+                                <span class="bucket-label">Very Low (&lt;40%)</span>
+                                <div class="bucket-bar">
+                                    <div class="bucket-fill" id="veryLowConfidenceBar" style="width: 0%"></div>
+                                </div>
+                                <span class="bucket-count" id="veryLowConfidenceCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="insight-detail-card recommendations">
+                        <h3><i class="fas fa-lightbulb"></i> Recommendations</h3>
+                        <div class="recommendations-list" id="recommendationsList">
+                            <div class="recommendation-item">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Loading recommendations...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time-based Insights -->
+                <div class="insights-timeline">
+                    <h3><i class="fas fa-calendar-alt"></i> Verification Activity Timeline</h3>
+                    <div class="timeline-chart-container">
+                        <canvas id="timelineChart"></canvas>
                     </div>
                 </div>
             </section>
