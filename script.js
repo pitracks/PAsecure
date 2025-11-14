@@ -672,11 +672,19 @@ function preprocessImageToTensor(imgOrFile, target = 224) {
             const url = URL.createObjectURL(imgOrFile);
             const img = new Image();
             img.onload = () => {
-                const t = tf.tidy(() => tf.browser.fromPixels(img)
-                    .resizeBilinear([target, target])
-                    .toFloat()
-                    .div(255)
-                    .expandDims(0));
+                // Match training preprocessing: MobileNetV2 preprocessing
+                // Training uses: mobilenet_v2.preprocess_input which normalizes to [-1, 1]
+                // Formula: (pixel / 127.5) - 1.0
+                const t = tf.tidy(() => {
+                    const pixels = tf.browser.fromPixels(img)
+                        .resizeBilinear([target, target])
+                        .toFloat();
+                    // Apply MobileNetV2 preprocessing: normalize to [-1, 1]
+                    return pixels
+                        .div(127.5)
+                        .sub(1.0)
+                        .expandDims(0);
+                });
                 URL.revokeObjectURL(url);
                 resolve(t);
             };
@@ -711,6 +719,12 @@ async function runCNNAnalysis(file) {
         const scores = Array.from(await scoresTensor.data());
         const elapsed = Math.round(performance.now() - start);
 
+        // Log all prediction scores for debugging
+        console.log('CNN Prediction Scores:');
+        CLASS_LABELS.forEach((label, idx) => {
+            console.log(`  ${label}: ${(scores[idx] * 100).toFixed(2)}%`);
+        });
+
         const bestScore = Math.max(...scores);
         const bestIndex = scores.indexOf(bestScore);
         const predictedLabel = CLASS_LABELS[bestIndex] || 'unknown';
@@ -720,6 +734,9 @@ async function runCNNAnalysis(file) {
             : predictedLabel.startsWith('pwd')
                 ? 'pwd'
                 : null;
+
+        console.log(`Predicted: ${predictedLabel} (${(bestScore * 100).toFixed(2)}% confidence)`);
+        console.log(`Status: ${isGenuine ? 'verified' : 'flagged'}`);
 
         return {
             confidence_score: Math.round(bestScore * 100),
