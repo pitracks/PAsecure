@@ -66,7 +66,19 @@ def build_datasets(data_dir: Path, img: int, batch: int):
     class_names = train_ds.class_names  # derived from subfolder names (sorted)
     print('Class names (from folders):', class_names)
 
+    # Add data augmentation to training set only
+    augmentation = K.Sequential([
+        L.RandomFlip('horizontal'),
+        L.RandomRotation(0.05),
+        L.RandomZoom(0.1),
+        L.RandomContrast(0.1),
+    ])
+    
+    def augment_image(image, label):
+        return augmentation(image, training=True), label
+    
     autotune = tf.data.AUTOTUNE
+    train_ds = train_ds.map(augment_image, num_parallel_calls=autotune)
     train_ds = train_ds.shuffle(1024).prefetch(autotune)
     val_ds = val_ds.prefetch(autotune)
     return train_ds, val_ds, class_names
@@ -78,13 +90,8 @@ def build_model(img: int, num_classes: int):
     base.trainable = False
 
     inputs = L.Input((img, img, 3))
-    x = K.Sequential([
-        L.RandomFlip('horizontal'),
-        L.RandomRotation(0.05),
-        L.RandomZoom(0.1),
-        L.RandomContrast(0.1),
-    ])(inputs)
-    x = K.applications.mobilenet_v2.preprocess_input(x)
+    # Apply MobileNetV2 preprocessing (normalizes to [-1, 1])
+    x = K.applications.mobilenet_v2.preprocess_input(inputs)
     x = base(x, training=False)
     x = L.GlobalAveragePooling2D()(x)
     x = L.Dropout(0.2)(x)
